@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class FeedViewModel @Inject constructor(
+class PlayerViewModel @Inject constructor(
     private val repository: AudioRepository,
     private val playerManager: AudioPlayerManager
 ) : ViewModel() {
@@ -25,24 +25,27 @@ class FeedViewModel @Inject constructor(
     val playbackState: StateFlow<PlaybackState> = playerManager.playbackState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlaybackState())
 
-    fun onPostClicked(post: AudioPost) {
-        playerManager.play(post.id, post.filePath)
-    }
-
-    fun pausePlayback() {
-        playerManager.pause()
-    }
-
-    fun resumePlayback() {
-        playerManager.resume()
-    }
-
-    fun deletePost(postId: String) {
+    fun playPost(postId: String) {
         viewModelScope.launch {
-            if (playbackState.value.currentPostId == postId) {
-                playerManager.stop()
-            }
-            repository.deletePost(postId)
+            val post = repository.getPost(postId) ?: return@launch
+            playerManager.play(post.id, post.filePath)
         }
+    }
+
+    fun togglePlayPause() {
+        val current = playbackState.value
+        if (current.isPlaying) {
+            playerManager.pause()
+        } else if (current.currentPostId != null) {
+            playerManager.resume()
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        playerManager.seekTo(positionMs)
+    }
+
+    fun stopPlayback() {
+        playerManager.stop()
     }
 }

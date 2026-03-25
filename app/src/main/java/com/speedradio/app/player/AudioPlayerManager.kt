@@ -58,6 +58,7 @@ class AudioPlayerManager @Inject constructor(
                             isPlaying = false,
                             positionMs = 0L
                         )
+                        // If it ends, it remains "active" but not playing.
                     }
                 }
             })
@@ -74,7 +75,7 @@ class AudioPlayerManager @Inject constructor(
                         durationMs = if (player.duration > 0) player.duration else 0L
                     )
                 }
-                delay(500) // Poll every 500ms
+                delay(500)
             }
         }
     }
@@ -85,24 +86,30 @@ class AudioPlayerManager @Inject constructor(
     }
 
     fun play(postId: String, filePath: String) {
-        if (_playbackState.value.currentPostId == postId && _playbackState.value.isPlaying) {
-            pause()
-            return
-        }
-
+        // "Play as many times as I want" logic:
+        // If it's the same track and already playing, keep playing (or restart if user prefers).
+        // Standard full-screen player behavior normally allows multiple plays via a dedicated play btn.
+        // We'll prioritize playing.
+        
         if (_playbackState.value.currentPostId != postId) {
             player.stop()
             player.clearMediaItems()
             player.setMediaItem(MediaItem.fromUri(filePath))
             player.prepare()
+            _playbackState.value = _playbackState.value.copy(
+                currentPostId = postId,
+                isPlaying = true,
+                positionMs = 0L
+            )
+        } else if (!_playbackState.value.isPlaying) {
+            // If it was paused or ended, resume it
+            if (player.playbackState == Player.STATE_ENDED) {
+                player.seekTo(0)
+            }
         }
 
-        _playbackState.value = _playbackState.value.copy(
-            currentPostId = postId,
-            isPlaying = true,
-            positionMs = 0L
-        )
         player.play()
+        _playbackState.value = _playbackState.value.copy(isPlaying = true)
     }
 
     fun pause() {
@@ -113,6 +120,7 @@ class AudioPlayerManager @Inject constructor(
     fun resume() {
         if (_playbackState.value.currentPostId != null && !_playbackState.value.isPlaying) {
             player.play()
+            _playbackState.value = _playbackState.value.copy(isPlaying = true)
         }
     }
 

@@ -66,6 +66,11 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
 
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    implementation(libs.coil.compose)
+
     implementation(libs.kotlinx.coroutines.android)
 
     debugImplementation(libs.androidx.ui.tooling)

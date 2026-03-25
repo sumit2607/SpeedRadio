@@ -69,7 +69,7 @@ class RecordViewModel @Inject constructor(
                 prepare()
                 start()
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = "Failed to start recording: ${e.message}")
+                _uiState.value = _uiState.value.copy(error = "Failed: ${e.message}")
                 release()
                 recorder = null
                 return@apply
@@ -108,9 +108,13 @@ class RecordViewModel @Inject constructor(
             filePath = file.absolutePath,
             durationMs = durationMs
         )
-        repository.addPost(post)
-        _uiState.value = RecordUiState(lastSavedTitle = title)
-        currentFile = null
+        
+        // Persist to local storage database
+        viewModelScope.launch {
+            repository.addPost(post)
+            _uiState.value = RecordUiState(lastSavedTitle = title)
+            currentFile = null
+        }
     }
 
     private fun startTimer() {
