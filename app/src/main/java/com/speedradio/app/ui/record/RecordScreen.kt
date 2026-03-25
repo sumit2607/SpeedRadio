@@ -1,64 +1,30 @@
 package com.speedradio.app.ui.record
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.speedradio.app.viewmodel.RecordViewModel
-
-private const val MAX_SECONDS = 30
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,200 +32,167 @@ fun RecordScreen(
     onNavigateBack: () -> Unit,
     viewModel: RecordViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    var permissionGranted by remember { mutableStateOf(false) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> permissionGranted = granted }
-
-    LaunchedEffect(Unit) {
-        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
-
+    val uiState by viewModel.uiState.collectAsState()
+    
+    // Auto-navigate back after save success with delay
     LaunchedEffect(uiState.lastSavedTitle) {
         if (uiState.lastSavedTitle != null) {
-            snackbarHostState.showSnackbar("Saved: ${uiState.lastSavedTitle}")
-        }
-    }
-
-    LaunchedEffect(uiState.error) {
-        if (uiState.error != null) {
-            snackbarHostState.showSnackbar(uiState.error!!)
+            delay(1500)
+            onNavigateBack()
         }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Record Clip", fontWeight = FontWeight.SemiBold) },
+            CenterAlignedTopAppBar(
+                title = { Text("New Recording", fontWeight = FontWeight.Black) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent
                 )
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Column(
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            TimerDisplay(seconds = uiState.elapsedSeconds, isRecording = uiState.isRecording)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ProgressArc(progress = uiState.elapsedSeconds / MAX_SECONDS.toFloat())
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            RecordButton(
-                isRecording = uiState.isRecording,
-                enabled = permissionGranted,
-                onClick = {
-                    if (uiState.isRecording) viewModel.stopRecording()
-                    else viewModel.startRecording()
-                }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            AnimatedVisibility(
-                visible = !permissionGranted,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Microphone permission required",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+                .padding(padding)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Grant Permission")
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Animated Timer Display
+                Text(
+                    text = formatTimer(uiState.elapsedSeconds),
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (uiState.isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    letterSpacing = (-2).sp,
+                    modifier = Modifier.animateContentSize()
+                )
+                
+                Text(
+                    text = if (uiState.isRecording) "Recording..." else "Push to start",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+
+                Spacer(modifier = Modifier.height(80.dp))
+
+                // Premium Pulse Record Button
+                RecordButton(
+                    isRecording = uiState.isRecording,
+                    onClick = {
+                        if (uiState.isRecording) viewModel.stopRecording() else viewModel.startRecording()
                     }
-                }
+                )
+
+                Spacer(modifier = Modifier.height(40.dp))
+                
+                Text(
+                    text = "Maximum length: 30 seconds",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = if (uiState.isRecording) "Tap to stop · Max 30s"
-                else if (!permissionGranted) ""
-                else "Tap the mic to start recording",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
+            // Error/Success Message Overlay
+            AnimatedVisibility(
+                visible = uiState.lastSavedTitle != null || uiState.error != null,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp)
+            ) {
+                Surface(
+                    color = if (uiState.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(24.dp),
+                    tonalElevation = 12.dp
+                ) {
+                   Text(
+                       text = uiState.error ?: "Saved: ${uiState.lastSavedTitle}",
+                       modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp),
+                       color = Color.White,
+                       fontWeight = FontWeight.Bold
+                   )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TimerDisplay(seconds: Int, isRecording: Boolean) {
-    val m = seconds / 60
-    val s = seconds % 60
-    val color by animateFloatAsState(
-        targetValue = if (isRecording) 1f else 0.5f,
-        label = "timerAlpha"
-    )
-    Text(
-        text = "%d:%02d".format(m, s),
-        fontSize = 64.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = color),
-        letterSpacing = 4.sp
-    )
-}
-
-@Composable
-private fun ProgressArc(progress: Float) {
-    // Simple text-based remaining time indicator
-    val remaining = (MAX_SECONDS - (progress * MAX_SECONDS)).toInt()
-    Text(
-        text = "$remaining s remaining",
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (progress > 0.75f) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.secondary,
-        fontWeight = FontWeight.Medium
-    )
-}
-
-@Composable
-private fun RecordButton(
+fun RecordButton(
     isRecording: Boolean,
-    enabled: Boolean,
     onClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.18f,
+        targetValue = 1.3f,
         animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = LinearEasing),
+            animation = tween(1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
     )
-    val scale = if (isRecording) pulseScale else 1f
 
     Box(contentAlignment = Alignment.Center) {
         if (isRecording) {
+            // "Breathing" outer ring
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .scale(scale)
+                    .size(140.dp)
+                    .scale(pulseScale)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha))
             )
         }
 
-        Box(
-            modifier = Modifier
-                .size(88.dp)
-                .clip(CircleShape)
-                .background(
-                    brush = if (isRecording) Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.error,
-                            MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
-                        )
-                    ) else Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primaryContainer
-                        )
-                    )
-                )
-                .border(
-                    width = 3.dp,
-                    color = if (isRecording) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.size(100.dp),
+            shape = CircleShape,
+            color = if (isRecording) Color.White else MaterialTheme.colorScheme.primary,
+            tonalElevation = 12.dp
         ) {
-            IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(88.dp)) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (isRecording) "Stop" else "Record",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
+            Icon(
+                imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxSize(),
+                tint = if (isRecording) MaterialTheme.colorScheme.primary else Color.White
+            )
         }
     }
+}
+
+private fun formatTimer(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%02d:%02d".format(m, s)
 }

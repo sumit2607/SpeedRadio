@@ -1,10 +1,15 @@
 package com.speedradio.app.player
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.speedradio.app.domain.AudioPost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,8 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class PlaybackState(
     val currentPostId: String? = null,
@@ -25,19 +28,19 @@ data class PlaybackState(
     val durationMs: Long = 0L
 )
 
-@Singleton
-class AudioPlayerManager @Inject constructor(
-    @ApplicationContext private val context: Context
+class AudioPlayerManager(
+    private val context: Context
 ) {
+    // Shared ExoPlayer instance Setup
+    val player: ExoPlayer by lazy {
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
 
-    private val _playbackState = MutableStateFlow(PlaybackState())
-    val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var progressJob: Job? = null
-
-    private val player: ExoPlayer by lazy {
         ExoPlayer.Builder(context).build().also { exo ->
+            exo.setAudioAttributes(audioAttributes, true)
+            exo.setHandleAudioBecomingNoisy(true) // Pauses automatically on unplugged headphones
             exo.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _playbackState.value = _playbackState.value.copy(
@@ -47,6 +50,11 @@ class AudioPlayerManager @Inject constructor(
                     if (isPlaying) startProgressPolling() else stopProgressPolling()
                 }
 
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    val postId = mediaItem?.mediaId
+                    _playbackState.value = _playbackState.value.copy(currentPostId = postId)
+                }
+
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == Player.STATE_READY) {
                         _playbackState.value = _playbackState.value.copy(
@@ -54,16 +62,20 @@ class AudioPlayerManager @Inject constructor(
                         )
                     } else if (state == Player.STATE_ENDED) {
                         stopProgressPolling()
-                        _playbackState.value = _playbackState.value.copy(
-                            isPlaying = false,
-                            positionMs = 0L
-                        )
-                        // If it ends, it remains "active" but not playing.
+                        _playbackState.value = _playbackState.value.copy(isPlaying = false, positionMs = 0L)
                     }
                 }
             })
         }
     }
+
+    private val _playbackState = MutableStateFlow(PlaybackState())
+    val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var progressJob: Job? = null
+    
+    private var currentQueue: List<AudioPost> = emptyList()
 
     private fun startProgressPolling() {
         progressJob?.cancel()
@@ -85,60 +97,71 @@ class AudioPlayerManager @Inject constructor(
         progressJob = null
     }
 
-    fun play(postId: String, filePath: String) {
-        // "Play as many times as I want" logic:
-        // If it's the same track and already playing, keep playing (or restart if user prefers).
-        // Standard full-screen player behavior normally allows multiple plays via a dedicated play btn.
-        // We'll prioritize playing.
+    fun play(post: AudioPost, fullQueue: List<AudioPost> = emptyList()) {
+        // Essential: start the MediaSessionService explicitly
+        val intent = Intent(context, PlaybackService::class.java)
+        context.startService(intent)
+
+        currentQueue = if (fullQueue.isNotEmpty()) fullQueue else listOf(post)
         
-        if (_playbackState.value.currentPostId != postId) {
+        val mediaItems = currentQueue.map { item ->
+            val metadata = MediaMetadata.Builder()
+                .setTitle(item.title)
+                .setArtist("Clip")
+                .setArtworkUri(Uri.parse("https://picsum.photos/seed/${item.id.hashCode()}/500/500"))
+                .build()
+
+            MediaItem.Builder()
+                .setMediaId(item.id)
+                .setUri(item.filePath)
+                .setMediaMetadata(metadata)
+                .build()
+        }
+
+        val targetIndex = currentQueue.indexOfFirst { it.id == post.id }.coerceAtLeast(0)
+
+        if (player.mediaItemCount != mediaItems.size || (player.mediaItemCount > 0 && player.getMediaItemAt(targetIndex).mediaId != post.id)) {
             player.stop()
             player.clearMediaItems()
-            player.setMediaItem(MediaItem.fromUri(filePath))
+            player.setMediaItems(mediaItems)
+            player.seekTo(targetIndex, 0L)
             player.prepare()
-            _playbackState.value = _playbackState.value.copy(
-                currentPostId = postId,
-                isPlaying = true,
-                positionMs = 0L
-            )
-        } else if (!_playbackState.value.isPlaying) {
-            // If it was paused or ended, resume it
-            if (player.playbackState == Player.STATE_ENDED) {
-                player.seekTo(0)
-            }
+        } else if (!player.isPlaying) {
+            if (player.playbackState == Player.STATE_ENDED) player.seekTo(targetIndex, 0L)
         }
 
         player.play()
-        _playbackState.value = _playbackState.value.copy(isPlaying = true)
+        _playbackState.value = _playbackState.value.copy(
+            currentPostId = post.id,
+            isPlaying = true
+        )
     }
 
-    fun pause() {
-        player.pause()
-        _playbackState.value = _playbackState.value.copy(isPlaying = false)
-    }
+    fun pause() = player.pause()
+    fun resume() = player.play()
+    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
 
-    fun resume() {
-        if (_playbackState.value.currentPostId != null && !_playbackState.value.isPlaying) {
+    fun playNext() {
+        if (player.hasNextMediaItem()) {
+            player.seekToNext()
             player.play()
-            _playbackState.value = _playbackState.value.copy(isPlaying = true)
         }
     }
 
-    fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs)
-        _playbackState.value = _playbackState.value.copy(positionMs = positionMs)
+    fun playPrevious() {
+        if (player.hasPreviousMediaItem()) {
+            player.seekToPrevious()
+            player.play()
+        }
     }
 
     fun stop() {
         player.stop()
-        player.clearMediaItems()
-        stopProgressPolling()
         _playbackState.value = PlaybackState()
     }
 
     fun release() {
         stopProgressPolling()
         player.release()
-        _playbackState.value = PlaybackState()
     }
 }

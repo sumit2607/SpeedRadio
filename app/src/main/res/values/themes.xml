@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SpeedRadio" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SpeedRadio" parent="android:Theme.Material.NoActionBar">
+        <!-- Match our premium deep background color (0xFF0E0E12) -->
+        <item name="android:windowBackground">#0E0E12</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

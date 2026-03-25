@@ -1,8 +1,7 @@
 package com.speedradio.app.ui.player
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -51,7 +50,7 @@ fun PlayerScreen(
 
     if (posts.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No posts available", color = Color.White)
+            Text("Discovering...", color = Color.White)
         }
         return
     }
@@ -111,12 +110,24 @@ private fun PlayerItem(
     val isPlaying = playbackState.isPlaying
     val imageUrl = "https://picsum.photos/seed/${post.id.hashCode()}/800/1200"
 
+    // Breathing glow animation
+    val infiniteTransition = rememberInfiniteTransition(label = "breathing")
+    val glowScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glowScale"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .clickable(onClick = onTogglePlay)
     ) {
-        // Blurred Background Image
+        // Immersive Backdrop
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(imageUrl)
@@ -126,22 +137,20 @@ private fun PlayerItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .blur(20.dp)
-                .scale(1.2f)
+                .blur(30.dp)
+                .scale(1.25f)
         )
 
-        // Gradient Overlays for depth and readability
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.5f),
+                            Color.Black.copy(alpha = 0.4f),
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.3f),
-                            Color.Black.copy(alpha = 0.8f),
-                            Color.Black
+                            Color.Black.copy(alpha = 0.5f),
+                            Color.Black.copy(alpha = 0.9f)
                         )
                     )
                 )
@@ -150,104 +159,92 @@ private fun PlayerItem(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp, vertical = 60.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Foreground Poster Image
-            Card(
-                modifier = Modifier
-                    .size(320.dp)
-                    .aspectRatio(1f),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = post.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+            // Pulsing Glowing Image Card
+            Box(contentAlignment = Alignment.Center) {
+                if (isPlaying) {
+                     Box(
+                        modifier = Modifier
+                            .size(310.dp)
+                            .scale(glowScale)
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                    )
+                }
+                
+                Card(
+                    modifier = Modifier.size(300.dp).aspectRatio(1f),
+                    shape = RoundedCornerShape(32.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 24.dp)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = post.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(50.dp))
 
-            // Title and Metadata Info
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = post.title,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
                     color = Color.White,
-                    letterSpacing = (-0.5).sp
+                    letterSpacing = (-1).sp
                 )
 
                 Text(
-                    text = "Recorded ${formatDate(post.createdAt)}",
+                    text = "SpeedRadio Original · ${formatDate(post.createdAt)}",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // Waveform visualizer (Only if playing)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (isPlaying) {
-                    Box(modifier = Modifier.scale(3.5f).padding(start = 24.dp)) {
-                        WaveformAnimation()
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(30.dp))
-
-            // Premium Control Bar
-            PremiumPlaybackControls(
+            // Modern Progress Section
+            PremiumProgressControl(
                 playbackState = playbackState,
                 onTogglePlay = onTogglePlay,
                 onSeek = onSeek
             )
         }
-
-        // Center status indicator when paused
-        if (!isPlaying) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(bottom = 120.dp) // Offset from the card
-                    .size(84.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Paused",
-                    tint = Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
+        
+        // Visual status feedback
+        AnimatedVisibility(
+            visible = !isPlaying,
+            enter = scaleIn() + fadeIn(),
+            exit = scaleOut() + fadeOut(),
+            modifier = Modifier.align(Alignment.Center).padding(bottom = 120.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.3f),
+                modifier = Modifier.size(100.dp)
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PremiumPlaybackControls(
+private fun PremiumProgressControl(
     playbackState: PlaybackState,
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit
@@ -262,102 +259,99 @@ private fun PremiumPlaybackControls(
         ((currentDisplayPosition / duration.toFloat()) * 100).toInt().coerceIn(0, 100)
     } else 0
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.12f),
-        tonalElevation = 8.dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.White.copy(alpha = 0.1f))
+            .padding(20.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Stream Progress",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
-                Text(
-                    text = "$percentage%",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 0.5.sp
-                )
-            }
+             Text(
+                text = "Live Playback Status",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.4f)
+            )
+            
+            // Percentage animated state
+             Text(
+                text = "$percentage%",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.secondary,
+                letterSpacing = 0.5.sp
+            )
+        }
 
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Slider(
-                    value = if (duration > 0) currentDisplayPosition.coerceIn(0f, duration.toFloat()) else 0f,
-                    onValueChange = { draggingPosition = it },
-                    onValueChangeFinished = {
-                        draggingPosition?.let { onSeek(it.toLong()) }
-                        draggingPosition = null
-                    },
-                    valueRange = 0f..(if (duration > 0) duration.toFloat() else 1f),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.15f)
-                    ),
-                    thumb = {
-                        Box(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatTime(currentDisplayPosition.toLong()),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-                Text(
-                    text = formatTime(duration),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                IconButton(
-                    onClick = onTogglePlay,
+        Slider(
+            value = if (duration > 0) currentDisplayPosition.coerceIn(0f, duration.toFloat()) else 0f,
+            onValueChange = { draggingPosition = it },
+            onValueChangeFinished = {
+                draggingPosition?.let { onSeek(it.toLong()) }
+                draggingPosition = null
+            },
+            valueRange = 0f..(if (duration > 0) duration.toFloat() else 1f),
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = Color.White.copy(alpha = 0.15f)
+            ),
+            thumb = {
+                Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .padding(2.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(
-                        imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+                )
+            }
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = formatTime(currentDisplayPosition.toLong()),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+            Text(
+                text = formatTime(duration),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.4f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Center primary control
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            FloatingActionButton(
+                onClick = onTogglePlay,
+                containerColor = Color.White,
+                contentColor = Color.Black,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.size(72.dp)
+            ) {
+                Icon(
+                    imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp)
+                )
             }
         }
     }
@@ -371,6 +365,6 @@ private fun formatTime(ms: Long): String {
 }
 
 private fun formatDate(millis: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
     return sdf.format(Date(millis))
 }

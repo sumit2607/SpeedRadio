@@ -26,16 +26,12 @@ class FeedViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlaybackState())
 
     fun onPostClicked(post: AudioPost) {
-        playerManager.play(post.id, post.filePath)
+        // Provide the entire list so System UI can support Next/Prev
+        playerManager.play(post, posts.value)
     }
 
-    fun pausePlayback() {
-        playerManager.pause()
-    }
-
-    fun resumePlayback() {
-        playerManager.resume()
-    }
+    fun pausePlayback() = playerManager.pause()
+    fun resumePlayback() = playerManager.resume()
 
     fun deletePost(postId: String) {
         viewModelScope.launch {

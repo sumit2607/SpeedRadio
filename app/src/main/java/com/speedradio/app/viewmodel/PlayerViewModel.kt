@@ -28,7 +28,8 @@ class PlayerViewModel @Inject constructor(
     fun playPost(postId: String) {
         viewModelScope.launch {
             val post = repository.getPost(postId) ?: return@launch
-            playerManager.play(post.id, post.filePath)
+            // Pass the entire list so System UI playback notification can support next/prev
+            playerManager.play(post, posts.value)
         }
     }
 
@@ -41,11 +42,8 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun seekTo(positionMs: Long) {
-        playerManager.seekTo(positionMs)
-    }
-
-    fun stopPlayback() {
-        playerManager.stop()
-    }
+    fun seekTo(positionMs: Long) = playerManager.seekTo(positionMs)
+    fun stopPlayback() = playerManager.stop()
+    fun playNext() = playerManager.playNext()
+    fun playPrev() = playerManager.playPrevious()
 }

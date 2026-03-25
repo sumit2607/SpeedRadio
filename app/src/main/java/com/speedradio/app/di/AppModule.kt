@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.speedradio.app.data.AudioPostDao
 import com.speedradio.app.data.AudioRepository
 import com.speedradio.app.data.SpeedRadioDatabase
+import com.speedradio.app.player.AudioPlayerManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,4 +34,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAudioRepository(dao: AudioPostDao): AudioRepository = AudioRepository(dao)
+
+    @Provides
+    @Singleton
+    fun provideAudioPlayerManager(@ApplicationContext context: Context): AudioPlayerManager {
+        return AudioPlayerManager(context)
+    }
 }
