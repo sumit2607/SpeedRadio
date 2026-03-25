@@ -2,6 +2,8 @@ package com.speedradio.app.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.speedradio.app.MainActivity
@@ -57,6 +59,7 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
+    @OptIn(UnstableApi::class)
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Clear session if we are not playing anymore
         if (!audioPlayerManager.player.isPlaying) {
