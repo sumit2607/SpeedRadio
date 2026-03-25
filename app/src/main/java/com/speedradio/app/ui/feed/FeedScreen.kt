@@ -1,9 +1,9 @@
 package com.speedradio.app.ui.feed
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -40,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +58,7 @@ import java.util.Locale
 @Composable
 fun FeedScreen(
     onNavigateToRecord: () -> Unit,
+    onNavigateToPlayer: (String) -> Unit,
     viewModel: FeedViewModel = hiltViewModel()
 ) {
     val posts by viewModel.posts.collectAsStateWithLifecycle()
@@ -121,7 +120,7 @@ fun FeedScreen(
                     AudioPostCard(
                         post = post,
                         playbackState = playbackState,
-                        onPlayPause = { viewModel.onPostClicked(post) },
+                        onNavigateToPlayer = { onNavigateToPlayer(post.id) },
                         onDelete = { viewModel.deletePost(post.id) }
                     )
                 }
@@ -134,22 +133,16 @@ fun FeedScreen(
 private fun AudioPostCard(
     post: AudioPost,
     playbackState: PlaybackState,
-    onPlayPause: () -> Unit,
+    onNavigateToPlayer: () -> Unit,
     onDelete: () -> Unit
 ) {
     val isCurrentPost = playbackState.currentPostId == post.id
     val isPlaying = isCurrentPost && playbackState.isPlaying
 
     val cardGlow by animateColorAsState(
-        targetValue = if (isPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+        targetValue = if (isCurrentPost) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
         animationSpec = tween(400),
         label = "cardGlow"
-    )
-
-    val playBtnScale by animateFloatAsState(
-        targetValue = if (isPlaying) 1.1f else 1f,
-        animationSpec = tween(200),
-        label = "playScale"
     )
 
     Box(
@@ -165,6 +158,7 @@ private fun AudioPostCard(
                 )
             )
             .background(cardGlow, RoundedCornerShape(20.dp))
+            .clickable(onClick = onNavigateToPlayer)
     ) {
         Row(
             modifier = Modifier
@@ -172,11 +166,9 @@ private fun AudioPostCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Play / Pause button
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .scale(playBtnScale)
                     .clip(CircleShape)
                     .background(
                         if (isCurrentPost) MaterialTheme.colorScheme.primary
@@ -184,15 +176,13 @@ private fun AudioPostCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                IconButton(onClick = onPlayPause) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = if (isCurrentPost) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.GraphicEq else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Playing" else "Play",
+                    tint = if (isCurrentPost) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -214,19 +204,10 @@ private fun AudioPostCard(
                         color = MaterialTheme.colorScheme.secondary
                     )
                     Text(
-                        text = "·",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
                         text = formatDate(post.createdAt),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                if (isPlaying) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    WaveformAnimation()
                 }
             }
 

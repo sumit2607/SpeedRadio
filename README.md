@@ -1,7 +1,7 @@
 # SpeedRadio 🎙️
 
 An **Audio-First Social Feed** Android app built with Jetpack Compose, MVVM, Hilt, and ExoPlayer.  
-Record short audio clips (max 30 seconds), browse them in a scrollable feed, and play them with seamless single-audio enforcement.
+Record short audio clips (max 30 seconds), browse them in a list, and enjoy a TikTok-style **Full-Screen Vertical Player** experience.
 
 ---
 
@@ -16,49 +16,53 @@ app/src/main/java/com/speedradio/app/
 ├── domain/
 │   └── AudioPost.kt          ← Core data model
 ├── player/
-│   ├── AudioPlayerManager.kt ← Central singleton ExoPlayer wrapper
-│   └── PlaybackService.kt    ← MediaSessionService (foreground playback)
+│   ├── AudioPlayerManager.kt ← Central singleton ExoPlayer wrapper (StateFlow)
+│   └── PlaybackService.kt    ← MediaSessionService (Foreground Service)
 ├── di/
 │   └── AppModule.kt          ← Hilt providers
 ├── viewmodel/
-│   ├── FeedViewModel.kt      ← Feed state + playback delegation
+│   ├── FeedViewModel.kt      ← List state & card interactions
+│   ├── PlayerViewModel.kt    ← Full-screen playback logic
 │   └── RecordViewModel.kt    ← MediaRecorder lifecycle + timer
 └── ui/
-    ├── theme/Theme.kt        ← Dark color scheme
+    ├── theme/Theme.kt        ← Aesthetic Dark Mode theme
     ├── navigation/AppNavGraph.kt
     ├── feed/
-    │   ├── FeedScreen.kt     ← LazyColumn feed + AudioPostCard
-    │   └── WaveformAnimation.kt ← Animated bars on active card
+    │   ├── FeedScreen.kt     ← Scrolling list of audio clips
+    │   └── WaveformAnimation.kt ← Animated visualizer bars
+    ├── player/
+    │   └── PlayerScreen.kt   ← Full-screen VerticalPager player
     └── record/
-        └── RecordScreen.kt   ← Permission, timer, pulsing mic button
+        └── RecordScreen.kt   ← Mic recording UI with permission handling
 ```
 
 ---
 
-## Architecture Decisions
+## Core Features & Architecture
 
-### Why MVVM?
-MVVM is the recommended pattern for Jetpack Compose apps. ViewModels survive configuration changes, expose state via `StateFlow` that Compose collects efficiently, and keep screens stateless and testable.
+### 1. Full-Screen Vertical Player
+- **Trigger**: Tapping any item in the feed list opens the full-screen player.
+- **Vertical Swipe**: Uses `VerticalPager` to switch between audio items effortlessly.
+- **Single Playback**: Swiping to a new item automatically stops the previous playback and starts the new one via the `AudioPlayerManager` singleton.
+- **Explicit Playback**: Scrolling the feed list itself does *not* auto-play. Playback only begins when a user explicitly enters the player mode.
 
-### Why a Central AudioPlayerManager?
-A single `@Singleton` wrapping one `ExoPlayer` instance is the simplest way to guarantee the **one-audio-at-a-time** invariant across the whole app — regardless of which screen is currently visible. A distributed approach (one player per feed item) makes stopping previous audio complex and error-prone.
+### 2. Single Audio Entry Management
+- **One Player to Rule Them All**: A centralized `@Singleton` `AudioPlayerManager` holds the only instance of `ExoPlayer`.
+- **State Flow**: The player manager exposes a `PlaybackState` Flow. All UI components (the list cards and the full-screen items) observe this single source of truth to show synchronized play/pause/active states.
+
+### 3. Lifecycle & Background Behavior
+- **Intentional Foreground Service**: Implementation includes a `MediaSessionService` (`PlaybackService`). This ensures that audio playback is **intentional and persistent**:
+  - **Going to Background**: Playback continues seamlessly because it is tied to an Android Foreground Service with the `mediaPlayback` type.
+  - **Returning to Foreground**: The UI collect state via `collectAsStateWithLifecycle`, automatically re-reflecting the current player state without restarts, duplicate instances, or memory leaks.
+- **Graceful Termination**: The player is released only when the `Application` or the `Service` is destroyed, preventing resource leaks.
 
 ---
 
-## How Key Problems Are Solved
+## Technical Performance
 
-### Single Audio Playback
-`AudioPlayerManager.play(postId, filePath)`:
-1. If the same post is already playing → **pause** (toggle).
-2. If a *different* post is playing → `stop()` + `clearMediaItems()` then load and play the new one.
-3. `PlaybackState(currentPostId, isPlaying)` is emitted via `StateFlow` — the UI reacts automatically.
-
-### Scroll + Playback Interaction
-ExoPlayer lives in `AudioPlayerManager`, which is a **singleton that outlives any Composable**. When a `LazyColumn` item scrolls off-screen its Composable is destroyed, but the player keeps running. The `FeedViewModel` (scoped to the NavBackStackEntry) holds the `playbackState` `StateFlow` — every visible card observes this shared state, so the correct card shows the "playing" indicator whenever it re-enters composition.
-
-### Lifecycle Events
-- **Background**: `AudioPlayerManager.pause()` is called from `FeedViewModel` which is observed inside the `RecordScreen`/`FeedScreen` with `collectAsStateWithLifecycle`. `Lifecycle.State.STARTED` gating means the flow stops when the app is backgrounded—but the simpler guarantee is that `PlaybackService` (a `MediaSessionService`) keeps the player process alive and the OS can present a media notification.
-- **Return**: Audio remains paused; the user resumes manually (or you can hook `onResume` to call `playerManager.resume()`). This is the expected TikTok-like UX.
+- **Zero Glitch Scrolling**: The `VerticalPager` with `beyondViewportPageCount = 1` pre-loads the next audio file for instant playback on transition.
+- **Compose Performance**: State management is handled via `snapshotFlow` within `LaunchedEffect` to react to page changes, ensuring minimum recompositions.
+- **Permission Design**: `RECORD_AUDIO` is requested gracefully only when the user enters the record flow.
 
 ---
 
@@ -66,64 +70,25 @@ ExoPlayer lives in `AudioPlayerManager`, which is a **singleton that outlives an
 
 | Decision | Rationale |
 |---|---|
-| In-memory repository | No database needed for MVP; adding Room is a 1-file change |
-| No seek bar | Keeps feed card UI minimal; trivial to add with a `Slider` bound to `ExoPlayer.currentPosition` polled via a coroutine |
-| Simple progress indicator (text) | Circular `Canvas`-drawn arc was deprioritised; the text `"N s remaining"` communicates the same info |
-| `MediaRecorder` → M4A/AAC | Best quality-to-size ratio, universally supported on Android |
-| No audio-focus management | Handled implicitly via `MediaSession`; explicit `AudioFocusRequest` is the next step |
+| No Feed Auto-Play | Prioritizes user intent and data savings; the full-screen player is the primary discovery tool. |
+| In-Memory Repository | Simple and fast for an MVP/local file app. |
+| Basic Progress Indicator | Focused on the "Audio-First Social" feel; aesthetic waveforms replace complex seek bars. |
 
 ---
 
-## What Would Come Next (More Time)
+## scaling & Future Scope
 
-1. **Audio focus handling** — `AudioFocusRequest` + ducking on incoming calls
-2. **Seek bar + waveform thumbnail** — scrub position in feed card
-3. **Room persistence** — survive app kill; migrate `AudioRepository` to a DAO
-4. **Swipe-to-delete** — `SwipeToDismiss` on each LazyColumn item
-5. **Record screen visualization** — live amplitude meter using `MediaRecorder.maxAmplitude`
-6. **Playback speed control** — trivial with ExoPlayer `setPlaybackParameters`
-7. **Share sheet** — `FileProvider` + `Intent.ACTION_SEND`
+1. **Audio Focus Handling**: Implement ducking/pausing on phone calls or other media.
+2. **Metadata Enrichment**: Support user avatars and descriptions in the vertical player.
+3. **Remote Streaming**: Easily swappable to HLS/Dash streams via `MediaItem.fromUri` in the Player Manager.
+4. **Offline Persistence**: Integrate Room to save the meta-data post-kill.
 
 ---
 
-## Scaling Toward a Backend
-
-| Layer | Current | With Backend |
-|---|---|---|
-| Storage | `context.filesDir` | S3 / GCS pre-signed upload |
-| Feed data | `MutableStateFlow<List>` | Paging 3 + REST/gRPC |
-| Playback | Local file URI | HLS stream URI (ExoPlayer supports natively) |
-| Auth | None | Firebase Auth / JWT |
-| Caching | None | `OkHttp` disk cache + offline fallback |
-
-ExoPlayer's `DefaultDataSource` handles local files and HTTP streams identically — switching is a URI change, not an architecture change.
-
----
-
-## Building & Running
-
-```bash
-# Open in Android Studio, or from CLI:
-./gradlew assembleDebug
-
-# Install on connected device / emulator
-./gradlew installDebug
-
-# Grant mic permission on first launch when prompted
-```
-
-**Requirements**
-- Android Studio Ladybug (2024.2+) or Gradle 8.7
-- JDK 17+
-- Android SDK 35, minSdk 26
-
----
-
-## Permissions
-
-| Permission | Why |
-|---|---|
-| `RECORD_AUDIO` | Microphone access for recording |
-| `FOREGROUND_SERVICE` | Keep `PlaybackService` alive in background |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Required for `mediaPlayback` foreground service type on API 34+ |
-| `POST_NOTIFICATIONS` | Media playback notification on Android 13+ |
+## Development Environment
+- **Kotlin**: 2.0.21
+- **Compose**: Foundation 1.7+ (via BOM 2024.09.03)
+- **Hilt**: 2.51.1
+- **Media3 (ExoPlayer)**: 1.4.1
+- **Target SDK**: 35
+- **Min SDK**: 26
