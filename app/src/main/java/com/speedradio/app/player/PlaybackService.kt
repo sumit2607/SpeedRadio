@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.speedradio.app.MainActivity
+import com.speedradio.app.R
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -18,6 +19,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        
+
         initializeSession()
     }
 
@@ -35,18 +38,14 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Sync local media items to the session player if not already there
-        // Actually, audioPlayerManager the one and only singleton shared across the app
+        // Important: Shared Player singleton
         mediaSession = MediaSession.Builder(this, audioPlayerManager.player)
             .setSessionActivity(pendingIntent)
             .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
-        // Ensure session is initialized before returning
-        if (mediaSession == null) {
-            initializeSession()
-        }
+        if (mediaSession == null) initializeSession()
         return mediaSession
     }
 
@@ -59,9 +58,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // If Nothing is playing, we stop the service and clear notifications
+        // Clear session if we are not playing anymore
         if (!audioPlayerManager.player.isPlaying) {
-            stopSelf()
+             pauseAllPlayersAndStopSelf()
         }
     }
 }

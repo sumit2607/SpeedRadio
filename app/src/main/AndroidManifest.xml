@@ -35,6 +35,10 @@
             </intent-filter>
         </service>
 
+        <meta-data
+            android:name="androidx.media3.session.notification.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+
     </application>
 
 </manifest>
