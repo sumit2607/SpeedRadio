@@ -1,6 +1,7 @@
 package com.speedradio.app.data
 
 import androidx.room.*
+import androidx.paging.PagingSource
 import com.speedradio.app.domain.AudioPost
 import kotlinx.coroutines.flow.Flow
 
@@ -8,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 interface AudioPostDao {
     @Query("SELECT * FROM audio_posts ORDER BY createdAt DESC")
     fun getAllPosts(): Flow<List<AudioPost>>
+
+    @Query("SELECT * FROM audio_posts ORDER BY createdAt DESC")
+    fun getAllPostsPaged(): PagingSource<Int, AudioPost>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPost(post: AudioPost)

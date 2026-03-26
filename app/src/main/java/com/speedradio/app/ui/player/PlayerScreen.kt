@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +49,7 @@ fun PlayerScreen(
 ) {
     val posts by viewModel.posts.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+    val haptic = LocalHapticFeedback.current
 
     if (posts.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -58,9 +61,16 @@ fun PlayerScreen(
     val initialIndex = posts.indexOfFirst { it.id == initialPostId }.coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { posts.size })
 
+    var lastSeenIndex by remember { mutableStateOf(initialIndex) }
+
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }.collect { index ->
             if (posts.isNotEmpty() && index < posts.size) {
+                // Only vibrate if this is an actual manual scrolling swipe, not the first load
+                if (index != lastSeenIndex) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    lastSeenIndex = index
+                }
                 viewModel.playPost(posts[index].id)
             }
         }
@@ -82,7 +92,10 @@ fun PlayerScreen(
         }
 
         IconButton(
-            onClick = onNavigateBack,
+            onClick = { 
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onNavigateBack() 
+            },
             modifier = Modifier
                 .padding(top = 48.dp, start = 12.dp)
                 .align(Alignment.TopStart)
@@ -249,6 +262,7 @@ private fun PremiumProgressControl(
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val duration = playbackState.durationMs
     val position = playbackState.positionMs
 
@@ -292,7 +306,10 @@ private fun PremiumProgressControl(
             value = if (duration > 0) currentDisplayPosition.coerceIn(0f, duration.toFloat()) else 0f,
             onValueChange = { draggingPosition = it },
             onValueChangeFinished = {
-                draggingPosition?.let { onSeek(it.toLong()) }
+                draggingPosition?.let { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSeek(it.toLong()) 
+                }
                 draggingPosition = null
             },
             valueRange = 0f..(if (duration > 0) duration.toFloat() else 1f),
@@ -341,7 +358,10 @@ private fun PremiumProgressControl(
             horizontalArrangement = Arrangement.Center
         ) {
             FloatingActionButton(
-                onClick = onTogglePlay,
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onTogglePlay() 
+                },
                 containerColor = Color.White,
                 contentColor = Color.Black,
                 shape = RoundedCornerShape(20.dp),

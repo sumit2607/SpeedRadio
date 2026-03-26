@@ -29,11 +29,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideAudioPostDao(database: SpeedRadioDatabase): AudioPostDao = database.audioPostDao()
-
-    @Provides
-    @Singleton
-    fun provideAudioRepository(dao: AudioPostDao): AudioRepository = AudioRepository(dao)
+    fun provideAudioRepository(database: SpeedRadioDatabase): AudioRepository = AudioRepository(database)
 
     @Provides
     @Singleton

@@ -3,6 +3,7 @@ package com.speedradio.app.player
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -31,7 +32,7 @@ data class PlaybackState(
 class AudioPlayerManager(
     private val context: Context
 ) {
-    // Shared ExoPlayer instance Setup
+    // SINGLE SOURCE OF TRUTH: The actual ExoPlayer
     val player: ExoPlayer by lazy {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -40,14 +41,18 @@ class AudioPlayerManager(
 
         ExoPlayer.Builder(context).build().also { exo ->
             exo.setAudioAttributes(audioAttributes, true)
-            exo.setHandleAudioBecomingNoisy(true) // Pauses automatically on unplugged headphones
+            exo.setHandleAudioBecomingNoisy(true)
             exo.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _playbackState.value = _playbackState.value.copy(
                         isPlaying = isPlaying,
                         durationMs = if (exo.duration > 0) exo.duration else 0L
                     )
-                    if (isPlaying) startProgressPolling() else stopProgressPolling()
+                    if (isPlaying) {
+                        startProgressPolling()
+                    } else {
+                        stopProgressPolling()
+                    }
                 }
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -56,17 +61,6 @@ class AudioPlayerManager(
                         currentPostId = postId,
                         positionMs = 0L
                     )
-                }
-
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY) {
-                        _playbackState.value = _playbackState.value.copy(
-                            durationMs = if (exo.duration > 0) exo.duration else 0L
-                        )
-                    } else if (state == Player.STATE_ENDED) {
-                        stopProgressPolling()
-                        _playbackState.value = _playbackState.value.copy(isPlaying = false, positionMs = 0L)
-                    }
                 }
             })
         }
@@ -79,6 +73,15 @@ class AudioPlayerManager(
     private var progressJob: Job? = null
     
     private var currentQueue: List<AudioPost> = emptyList()
+
+    private fun startService() {
+        android.util.Log.d("MEDIA_DEBUG", "startService called")
+        val intent = Intent(context, PlaybackService::class.java)
+        // Use standard startService. Since the app is in the foreground when play is clicked,
+        // this is legal. Media3 will automatically promote the service to foreground (and post
+        // the notification) once the buffer is ready and playback actually begins.
+        context.startService(intent)
+    }
 
     private fun startProgressPolling() {
         progressJob?.cancel()
@@ -101,13 +104,12 @@ class AudioPlayerManager(
     }
 
     fun play(post: AudioPost, fullQueue: List<AudioPost> = emptyList()) {
-        val intent = Intent(context, PlaybackService::class.java)
-        context.startService(intent)
-
         currentQueue = if (fullQueue.isNotEmpty()) fullQueue else listOf(post)
         val targetIndex = currentQueue.indexOfFirst { it.id == post.id }.coerceAtLeast(0)
 
-        // Check if playlist needs update
+        // Start service FIRST before doing any player operations
+        startService()
+
         if (player.mediaItemCount != currentQueue.size) {
             val mediaItems = currentQueue.map { item ->
                 val metadata = MediaMetadata.Builder()
@@ -128,15 +130,10 @@ class AudioPlayerManager(
             player.seekTo(targetIndex, 0L)
             player.prepare()
         } else if (player.currentMediaItemIndex != targetIndex) {
-            // FIXED: If we are at the wrong index, seek to the right one!
             player.seekTo(targetIndex, 0L)
         }
 
         player.play()
-        _playbackState.value = _playbackState.value.copy(
-            currentPostId = post.id,
-            isPlaying = true
-        )
     }
 
     fun pause() = player.pause()
@@ -160,6 +157,8 @@ class AudioPlayerManager(
     fun stop() {
         player.stop()
         _playbackState.value = PlaybackState()
+        // Stop service explicitly
+        context.stopService(Intent(context, PlaybackService::class.java))
     }
 
     fun release() {

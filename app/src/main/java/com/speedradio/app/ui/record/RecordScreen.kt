@@ -19,7 +19,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -32,7 +40,17 @@ fun RecordScreen(
     onNavigateBack: () -> Unit,
     viewModel: RecordViewModel = hiltViewModel()
 ) {
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startRecording()
+        }
+    }
     
     // Auto-navigate back after save success with delay
     LaunchedEffect(uiState.lastSavedTitle) {
@@ -47,7 +65,10 @@ fun RecordScreen(
             CenterAlignedTopAppBar(
                 title = { Text("New Recording", fontWeight = FontWeight.Black) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onNavigateBack() 
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -96,7 +117,16 @@ fun RecordScreen(
                 RecordButton(
                     isRecording = uiState.isRecording,
                     onClick = {
-                        if (uiState.isRecording) viewModel.stopRecording() else viewModel.startRecording()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (uiState.isRecording) {
+                            viewModel.stopRecording()
+                        } else {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                viewModel.startRecording()
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
                     }
                 )
 

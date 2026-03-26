@@ -111,7 +111,7 @@ class RecordViewModel @Inject constructor(
         
         // Persist to local storage database
         viewModelScope.launch {
-            repository.addPost(post)
+            repository.insertPost(post)
             _uiState.value = RecordUiState(lastSavedTitle = title)
             currentFile = null
         }

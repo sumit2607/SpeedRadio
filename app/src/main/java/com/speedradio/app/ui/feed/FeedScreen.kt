@@ -6,13 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -28,7 +26,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.speedradio.app.domain.AudioPost
+import com.speedradio.app.player.PlaybackState
 import com.speedradio.app.viewmodel.FeedViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,31 +45,28 @@ fun FeedScreen(
     onNavigateToRecord: () -> Unit,
     viewModel: FeedViewModel = hiltViewModel()
 ) {
-    val posts by viewModel.posts.collectAsStateWithLifecycle()
+    val pagedPosts: LazyPagingItems<AudioPost> = viewModel.pagedPosts.collectAsLazyPagingItems()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+    val haptic = LocalHapticFeedback.current
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
                 title = { 
-                    Text(
-                        "SpeedRadio", 
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = (-1).sp,
-                        fontSize = 24.sp
-                    ) 
+                    Text("SpeedRadio", fontWeight = FontWeight.Black, fontSize = 28.sp) 
                 },
-                actions = {
-                    IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, contentDescription = null) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onNavigateToRecord,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onNavigateToRecord()
+                },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
@@ -75,32 +76,35 @@ fun FeedScreen(
             }
         }
     ) { padding ->
-        if (posts.isEmpty()) {
+        if (pagedPosts.itemCount == 0) {
             EmptyFeedView(modifier = Modifier.padding(padding))
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                itemsIndexed(posts, key = { _, post -> post.id }) { index, post ->
-                    val isPlaying = playbackState.currentPostId == post.id && playbackState.isPlaying
-                    
-                    // Staggered enter animation
-                    val animatedAlpha by animateFloatAsState(
-                        targetValue = 1f,
-                        animationSpec = tween(durationMillis = 600, delayMillis = index * 100),
-                        label = "feedEnter"
-                    )
-
-                    FeedItem(
-                        post = post,
-                        isActive = playbackState.currentPostId == post.id,
-                        isPlaying = isPlaying,
-                        onClick = { onNavigateToPlayer(post.id) },
-                        onDelete = { viewModel.deletePost(post.id) },
-                        modifier = Modifier.scale(animatedAlpha)
-                    )
+                items(
+                    count = pagedPosts.itemCount,
+                    key = pagedPosts.itemKey { it.id }
+                ) { index ->
+                    val post = pagedPosts[index]
+                    if (post != null) {
+                        FeedItem(
+                            post = post,
+                            playbackState = playbackState,
+                            onClick = { 
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onNavigateToPlayer(post.id) 
+                            },
+                            onDelete = { 
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.deletePost(post.id) 
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -110,32 +114,38 @@ fun FeedScreen(
 @Composable
 fun FeedItem(
     post: AudioPost,
-    isActive: Boolean,
-    isPlaying: Boolean,
+    playbackState: PlaybackState,
     onClick: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    onDelete: () -> Unit
 ) {
+    val isPlaying = playbackState.currentPostId == post.id && playbackState.isPlaying
+    
+    // Pulse animation for active playback
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulse by infiniteTransition.animateFloat(
+    val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.05f,
+        targetValue = 1.03f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200),
+            animation = tween(1200, easing = LinearOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulseScale"
+        label = "scale"
     )
 
-    Surface(
-        modifier = modifier
+    Card(
+        modifier = Modifier
             .fillMaxWidth()
-            .scale(if (isPlaying) pulse else 1f)
+            .scale(if (isPlaying) scale else 1f)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isActive) 12.dp else 2.dp,
-        border = if (isActive) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)) else null
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPlaying) 
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) 
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isPlaying) 8.dp else 2.dp
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
