@@ -52,7 +52,10 @@ class AudioPlayerManager(
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val postId = mediaItem?.mediaId
-                    _playbackState.value = _playbackState.value.copy(currentPostId = postId)
+                    _playbackState.value = _playbackState.value.copy(
+                        currentPostId = postId,
+                        positionMs = 0L
+                    )
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
@@ -98,36 +101,35 @@ class AudioPlayerManager(
     }
 
     fun play(post: AudioPost, fullQueue: List<AudioPost> = emptyList()) {
-        // Essential: start the MediaSessionService explicitly
         val intent = Intent(context, PlaybackService::class.java)
         context.startService(intent)
 
         currentQueue = if (fullQueue.isNotEmpty()) fullQueue else listOf(post)
-        
-        val mediaItems = currentQueue.map { item ->
-            val metadata = MediaMetadata.Builder()
-                .setTitle(item.title)
-                .setArtist("Clip")
-                .setArtworkUri(Uri.parse("https://picsum.photos/seed/${item.id.hashCode()}/500/500"))
-                .build()
-
-            MediaItem.Builder()
-                .setMediaId(item.id)
-                .setUri(item.filePath)
-                .setMediaMetadata(metadata)
-                .build()
-        }
-
         val targetIndex = currentQueue.indexOfFirst { it.id == post.id }.coerceAtLeast(0)
 
-        if (player.mediaItemCount != mediaItems.size || (player.mediaItemCount > 0 && player.getMediaItemAt(targetIndex).mediaId != post.id)) {
+        // Check if playlist needs update
+        if (player.mediaItemCount != currentQueue.size) {
+            val mediaItems = currentQueue.map { item ->
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .setArtist("Clip")
+                    .setArtworkUri(Uri.parse("https://picsum.photos/seed/${item.id.hashCode()}/500/500"))
+                    .build()
+
+                MediaItem.Builder()
+                    .setMediaId(item.id)
+                    .setUri(item.filePath)
+                    .setMediaMetadata(metadata)
+                    .build()
+            }
             player.stop()
             player.clearMediaItems()
             player.setMediaItems(mediaItems)
             player.seekTo(targetIndex, 0L)
             player.prepare()
-        } else if (!player.isPlaying) {
-            if (player.playbackState == Player.STATE_ENDED) player.seekTo(targetIndex, 0L)
+        } else if (player.currentMediaItemIndex != targetIndex) {
+            // FIXED: If we are at the wrong index, seek to the right one!
+            player.seekTo(targetIndex, 0L)
         }
 
         player.play()
