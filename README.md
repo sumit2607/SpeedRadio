@@ -5,11 +5,28 @@ Record short audio clips (max 30 seconds), browse them in a paginated list, and 
 
 ---
 
-## Screenshots & Features at a Glance
+## Screenshots
 
-| Feed Screen | Full-Screen Player | Record Screen |
-|---|---|---|
-| Paginated audio list with waveform indicators | Immersive vertical swipe player | Animated mic recording with 30s limit |
+<table>
+  <tr>
+    <td align="center"><b>Feed Screen</b></td>
+    <td align="center"><b>Full-Screen Player</b></td>
+    <td align="center"><b>Record — Idle</b></td>
+    <td align="center"><b>Record — Active</b></td>
+  </tr>
+  <tr>
+    <td><img src="4.jpeg" width="180"/></td>
+    <td><img src="2.jpeg" width="180"/></td>
+    <td><img src="1.jpeg" width="180"/></td>
+    <td><img src="3.jpeg" width="180"/></td>
+  </tr>
+  <tr>
+    <td align="center">Paginated audio list with gradient play icons</td>
+    <td align="center">Glassmorphic player with blurred backdrop & seek control</td>
+    <td align="center">Animated mic button, 30s timer, push to start</td>
+    <td align="center">Pulsing ring animation while recording in progress</td>
+  </tr>
+</table>
 
 ---
 
