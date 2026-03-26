@@ -51,11 +51,11 @@ fun FeedScreen(
 
     Scaffold(
         topBar = {
-            LargeTopAppBar(
-                title = { 
-                    Text("SpeedRadio", fontWeight = FontWeight.Black, fontSize = 28.sp) 
+            TopAppBar(
+                title = {
+                    Text("SpeedRadio", fontWeight = FontWeight.Black, fontSize = 28.sp)
                 },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
